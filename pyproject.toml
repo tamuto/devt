@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "devt"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["tamuto <mutomob@gmail.com>"]
 license = "MIT"
