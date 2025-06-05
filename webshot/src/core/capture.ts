@@ -99,6 +99,9 @@ export class WebScreenshotCapture {
         console.log(`✅ Already at target URL: ${currentUrl}`);
       }
       
+      // 複合アプローチで描画完了を待機
+      await this.waitForCompleteRender(page);
+      
       // スクリーンショットを撮影
       const screenshotBuffer = await page.screenshot({
         fullPage,
@@ -198,6 +201,95 @@ export class WebScreenshotCapture {
 
     } finally {
       await page.close();
+    }
+  }
+
+  /**
+   * 複合アプローチでページの描画完了を待機
+   */
+  private async waitForCompleteRender(page: Page): Promise<void> {
+    console.log('⏳ Waiting for complete page render...');
+    
+    try {
+      // Phase 1: 基本的な読み込み完了
+      await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+      await page.waitForLoadState('networkidle', { timeout: 15000 });
+      console.log('✓ Basic loading completed');
+      
+      // Phase 2: React特有の待機
+      await this.waitForReactStability(page);
+      
+      // Phase 3: DOM変更の安定化待機
+      await this.waitForDOMStability(page);
+      
+      // Phase 4: 最終安定化待機
+      await page.waitForTimeout(1000);
+      console.log('✓ Complete render waiting finished');
+      
+    } catch (error) {
+      console.warn('⚠️ Render waiting timeout, proceeding with screenshot:', error);
+    }
+  }
+
+  /**
+   * React特有の描画完了を待機
+   */
+  private async waitForReactStability(page: Page): Promise<void> {
+    try {
+      // React DevTools APIの存在確認と安定性チェック
+      await page.waitForFunction(`() => {
+        if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+          return !window.__REACT_DEVTOOLS_GLOBAL_HOOK__.isProfiling;
+        }
+        return true;
+      }`, { timeout: 5000 }).catch(() => {});
+
+      // RequestIdleCallback による空き時間待機
+      await page.waitForFunction(`() => {
+        return new Promise(resolve => {
+          if (window.requestIdleCallback) {
+            window.requestIdleCallback(() => resolve(true), { timeout: 3000 });
+          } else {
+            setTimeout(() => resolve(true), 100);
+          }
+        });
+      }`, { timeout: 8000 }).catch(() => {});
+      
+      console.log('✓ React stability check completed');
+    } catch (error) {
+      console.warn('⚠️ React stability check failed:', error);
+    }
+  }
+
+  /**
+   * DOM変更の安定化を待機
+   */
+  private async waitForDOMStability(page: Page): Promise<void> {
+    try {
+      await page.waitForFunction(`() => {
+        return new Promise(resolve => {
+          let mutationCount = 0;
+          const observer = new MutationObserver(() => {
+            mutationCount++;
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true
+          });
+          
+          // 500ms間DOM変更がないことを確認
+          setTimeout(() => {
+            observer.disconnect();
+            resolve(mutationCount === 0);
+          }, 500);
+        });
+      }`, { timeout: 10000 }).catch(() => {});
+      
+      console.log('✓ DOM stability check completed');
+    } catch (error) {
+      console.warn('⚠️ DOM stability check failed:', error);
     }
   }
 
