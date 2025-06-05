@@ -77,6 +77,25 @@ npx @infodb/webshot extract --input ./screenshots --output ./images
 npx @infodb/webshot extract --file ./screenshots/hash_0001_logs.json
 ```
 
+### ログインフォーム解析と認証設定生成
+
+```bash
+# ログインページの解析
+npx @infodb/webshot analyze-auth https://example.com/login
+
+# 認証テスト付きで解析
+npx @infodb/webshot analyze-auth https://example.com/login \
+  --username testuser \
+  --password testpass
+
+# 設定ファイル出力先を指定
+npx @infodb/webshot analyze-auth https://example.com/login \
+  --output ./my-auth-config.json
+
+# ヘッドレスモードで実行
+npx @infodb/webshot analyze-auth https://example.com/login --headless
+```
+
 ## オプション
 
 ### `capture` コマンド
@@ -102,6 +121,14 @@ npx @infodb/webshot extract --file ./screenshots/hash_0001_logs.json
 - `-i, --input <dir>`: スクリーンショットディレクトリ（デフォルト: `./screenshots`）
 - `-o, --output <dir>`: 抽出画像の出力ディレクトリ（オプション）
 - `-f, --file <path>`: 単一JSONファイルから抽出（オプション）
+
+### `analyze-auth` コマンド
+
+- `<url>`: 解析するログインページのURL（必須）
+- `-u, --username <username>`: ログインテスト用ユーザー名
+- `-p, --password <password>`: ログインテスト用パスワード  
+- `-o, --output <path>`: 認証設定ファイルの出力パス（デフォルト: `./auth-config.json`）
+- `--headless`: ヘッドレスモードでブラウザを実行
 
 ## ファイル構造
 
