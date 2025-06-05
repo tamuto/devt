@@ -57,3 +57,13 @@ This is a CLI tool for capturing web screenshots with diff detection using Playw
 - **chalk**: Terminal colors and formatting
 
 The codebase is fully TypeScript with strict typing enabled and follows a modular architecture separating concerns between CLI, core logic, authentication, and utilities.
+
+## Future Development Tasks
+
+### Authentication Enhancements
+
+1. **Cognito Managed Login Support**: Add support for AWS Cognito hosted UI authentication flows
+   - Handle OAuth2/OIDC redirects
+   - JWT token extraction and cookie management
+   - Support for federated identity providers
+   - Consider cookie-based auth instead of form-based for managed logins

@@ -5,6 +5,9 @@ import chalk from 'chalk';
 import { WebScreenshotCapture } from '../core/capture';
 import { CaptureOptionsWithAuth, AuthenticationOptions } from '../types/auth';
 import { loadAuthConfig, getAuthFromEnv } from '../utils/auth-config';
+import { LoginFormAnalyzer } from '../utils/form-analyzer';
+import { chromium } from 'playwright';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 // パッケージ情報を読み込み
@@ -192,6 +195,114 @@ program
     } catch (error) {
       console.error(chalk.red('❌ Error:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
+    }
+  });
+
+program
+  .command('analyze-auth')
+  .description('Analyze login form and generate authentication config')
+  .argument('<url>', 'URL of the login page to analyze')
+  .option('-u, --username <username>', 'Username for login test')
+  .option('-p, --password <password>', 'Password for login test')
+  .option('-o, --output <path>', 'Output path for auth config file', './auth-config.json')
+  .option('--headless', 'Run browser in headless mode')
+  .action(async (url: string, options: any) => {
+    let browser;
+    try {
+      console.log(chalk.blue('🔍 Analyzing login form...'));
+      console.log(chalk.gray(`URL: ${url}`));
+
+      browser = await chromium.launch({
+        headless: !!options.headless,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+
+      const page = await browser.newPage();
+      const analyzer = new LoginFormAnalyzer(page);
+
+      // フォーム解析
+      console.log(chalk.yellow('📋 Analyzing page structure...'));
+      const analysis = await analyzer.analyzeLoginForm(url);
+
+      if (!analysis.hasLoginForm) {
+        console.log(chalk.red('❌ No login form detected on this page'));
+        console.log(chalk.cyan('Recommendations:'));
+        analysis.recommendations.forEach(rec => {
+          console.log(chalk.gray(`  • ${rec}`));
+        });
+        return;
+      }
+
+      console.log(chalk.green('✅ Login form detected!'));
+      console.log(chalk.cyan('Form details:'));
+      console.log(chalk.white(`  • Username field: ${analysis.formSelectors!.usernameSelector}`));
+      console.log(chalk.white(`  • Password field: ${analysis.formSelectors!.passwordSelector}`));
+      console.log(chalk.white(`  • Submit button: ${analysis.formSelectors!.submitSelector}`));
+
+      // 認証情報が提供されている場合、ログインテストを実行
+      if (options.username && options.password) {
+        console.log(chalk.yellow('🔑 Testing login with provided credentials...'));
+        
+        const authConfig = analyzer.generateAuthConfig(analysis, {
+          username: options.username,
+          password: options.password
+        });
+
+        const loginResult = await analyzer.analyzePostLogin(authConfig, {
+          username: options.username,
+          password: options.password
+        });
+
+        if (loginResult.success) {
+          console.log(chalk.green('✅ Login test successful!'));
+          console.log(chalk.cyan(`  • Post-login URL: ${loginResult.postLoginUrl}`));
+
+          console.log(chalk.cyan('Post-login analysis:'));
+          loginResult.recommendations.forEach(rec => {
+            console.log(chalk.gray(`  • ${rec}`));
+          });
+        } else {
+          console.log(chalk.yellow('⚠️  Login test failed or uncertain'));
+          console.log(chalk.cyan('Issues found:'));
+          loginResult.recommendations.forEach(rec => {
+            console.log(chalk.gray(`  • ${rec}`));
+          });
+        }
+      } else {
+        console.log(chalk.yellow('ℹ️  Provide --username and --password to test login'));
+      }
+
+      console.log(chalk.cyan('🔍 Authentication detection strategy:'));
+      console.log(chalk.gray('  • Uses multi-stage fallback detection (URL change → form disappear → timeout)'));
+      console.log(chalk.gray('  • No waitForSelector needed - automatic detection enabled'));
+
+      // 認証設定JSONを生成
+      const authConfig = analyzer.generateAuthConfig(analysis, {
+        username: options.username || 'your_username',
+        password: options.password || 'your_password'
+      });
+
+      // ファイルに保存
+      const outputPath = path.resolve(options.output);
+      await fs.writeFile(outputPath, JSON.stringify(authConfig, null, 2), 'utf-8');
+
+      console.log(chalk.green('📄 Authentication config generated!'));
+      console.log(chalk.cyan(`  • File saved: ${outputPath}`));
+      
+      if (!options.username || !options.password) {
+        console.log(chalk.yellow('⚠️  Remember to update the username and password in the config file'));
+      }
+
+      console.log(chalk.cyan('\nTo use this config with webshot:'));
+      console.log(chalk.white(`  webshot capture <target_url> --auth-config ${outputPath}`));
+
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
     }
   });
 

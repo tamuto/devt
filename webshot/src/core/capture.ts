@@ -86,8 +86,18 @@ export class WebScreenshotCapture {
         await authHandler.authenticate(auth);
       }
       
-      // 目的のページに移動
-      await page.goto(url, { waitUntil: 'networkidle' });
+      // 認証後のURLが目的URLと異なる場合のみ移動
+      const currentUrl = await page.evaluate('window.location.href');
+      const targetUrl = url;
+      
+      console.log(`🔍 Checking URLs: Current=${currentUrl}, Target=${targetUrl}`);
+      
+      if (currentUrl !== targetUrl) {
+        console.log(`🔄 Navigating to target URL: ${currentUrl} → ${targetUrl}`);
+        await page.goto(url, { waitUntil: 'networkidle' });
+      } else {
+        console.log(`✅ Already at target URL: ${currentUrl}`);
+      }
       
       // スクリーンショットを撮影
       const screenshotBuffer = await page.screenshot({
