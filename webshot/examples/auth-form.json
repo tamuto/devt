@@ -1,0 +1,15 @@
+{
+  "type": "form",
+  "credentials": {
+    "username": "your_username",
+    "password": "your_password"
+  },
+  "formSelectors": {
+    "loginUrl": "https://example.com/login",
+    "usernameSelector": "#username",
+    "passwordSelector": "#password",
+    "submitSelector": "#login-button"
+  },
+  "waitForSelector": ".dashboard",
+  "timeout": 30000
+}

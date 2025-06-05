@@ -1,0 +1,17 @@
+{
+  "type": "cookie",
+  "cookies": [
+    {
+      "name": "sessionId",
+      "value": "abc123xyz789",
+      "domain": "example.com",
+      "path": "/"
+    },
+    {
+      "name": "authToken",
+      "value": "bearer_token_here",
+      "domain": "example.com",
+      "path": "/"
+    }
+  ]
+}
