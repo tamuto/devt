@@ -242,6 +242,75 @@ program
   });
 
 program
+  .command('interactive')
+  .description('Start interactive screenshot mode with browser')
+  .argument('<url>', 'URL of the web page to open')
+  .option('-o, --output <dir>', 'Output directory for screenshots', './screenshots')
+  .option('-w, --width <number>', 'Viewport width', '1280')
+  .option('-h, --height <number>', 'Viewport height', '720')
+  .option('--auth-config <path>', 'Path to authentication config file')
+  .option('--auth-type <type>', 'Authentication type (basic|form|cookie|header)')
+  .option('--username <username>', 'Username for authentication')
+  .option('--password <password>', 'Password for authentication')
+  .action(async (url: string, options: any) => {
+    try {
+      console.log(chalk.blue('🚀 Starting interactive mode...'));
+      console.log(chalk.gray(`URL: ${url}`));
+      console.log(chalk.gray(`Output: ${path.resolve(options.output)}`));
+
+      // 認証設定を取得
+      let auth: AuthenticationOptions | undefined;
+      if (options.authConfig) {
+        console.log(chalk.yellow('🔐 Loading authentication config...'));
+        auth = await loadAuthConfig(options.authConfig);
+      } else if (options.authType) {
+        if (options.authType === 'basic' && options.username && options.password) {
+          auth = {
+            type: 'basic' as const,
+            credentials: {
+              username: options.username,
+              password: options.password
+            }
+          };
+        } else if (options.authType === 'env') {
+          auth = getAuthFromEnv('basic');
+        }
+      }
+
+      const captureOptions: CaptureOptionsWithAuth = {
+        url,
+        viewport: {
+          width: parseInt(options.width, 10),
+          height: parseInt(options.height, 10)
+        },
+        auth
+      };
+
+      const capture = new WebScreenshotCapture(options.output);
+      
+      // ヘッドレスモードを無効にしてブラウザを表示
+      await capture.init(false);
+      
+      console.log(chalk.yellow('🌐 Opening browser in interactive mode...'));
+      
+      if (auth) {
+        console.log(chalk.cyan('🔑 Authentication will be performed...'));
+      }
+      
+      // インターラクティブモードを開始
+      await capture.startInteractive(captureOptions);
+      
+      // 終了処理
+      await capture.close();
+      console.log(chalk.green('✅ Interactive session completed!'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+program
   .command('analyze-auth')
   .description('Analyze login form and generate authentication config')
   .argument('<url>', 'URL of the login page to analyze')

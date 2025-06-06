@@ -34,9 +34,9 @@ export class WebScreenshotCapture {
   /**
    * ブラウザを起動
    */
-  async init(): Promise<void> {
+  async init(headless: boolean = true): Promise<void> {
     this.browser = await chromium.launch({
-      headless: true
+      headless
     });
   }
 
@@ -310,6 +310,249 @@ export class WebScreenshotCapture {
       console.log('✓ DOM stability check completed');
     } catch (error) {
       console.warn('⚠️ DOM stability check failed:', error);
+    }
+  }
+
+  /**
+   * インターラクティブモードでブラウザを起動
+   */
+  async startInteractive(options: CaptureOptionsWithAuth): Promise<void> {
+    if (!this.browser) {
+      throw new Error('Browser not initialized. Call init() first.');
+    }
+
+    const {
+      url,
+      viewport = { width: 1280, height: 720 },
+      auth
+    } = options;
+
+    // 出力ディレクトリを作成
+    await ensureDirectory(this.outputDir);
+    await ensureDirectory(path.join(this.outputDir, 'logs'));
+    await ensureDirectory(path.join(this.outputDir, 'evidence'));
+
+    console.log('🚀 Starting interactive mode...');
+    console.log('📋 Controls:');
+    console.log('  Ctrl+S: Take screenshot');
+    console.log('  Ctrl+Q: Exit');
+    console.log('  Or close browser window to exit');
+
+    // ページを作成
+    const page = await this.browser.newPage();
+    await page.setViewportSize(viewport);
+
+    // 認証が必要な場合は実行
+    if (auth) {
+      console.log('🔑 Authenticating...');
+      const authHandler = new AuthenticationHandler(page);
+      await authHandler.authenticate(auth);
+    }
+
+    // スクリーンショット撮影関数を公開
+    await page.exposeFunction('takeScreenshot', async () => {
+      try {
+        const hash = generateUrlHash(url);
+        const sequence = await getNextSequence(this.outputDir, hash);
+        const evidenceSequence = await getNextEvidenceSequence(this.outputDir, hash);
+
+        // 複合アプローチで描画完了を待機
+        await this.waitForCompleteRender(page);
+
+        // スクリーンショットを撮影
+        const screenshotBuffer = await page.screenshot({
+          fullPage: true,
+          type: 'png'
+        });
+
+        // HTMLコンテンツを取得
+        const htmlContent = await page.content();
+        const imageBase64 = bufferToBase64(screenshotBuffer);
+        const timestamp = new Date().toISOString();
+
+        // logsファイル名を生成
+        const logsFilename = generateFilename(hash, sequence, 'logs');
+
+        // メタデータを作成
+        const metadata: ScreenshotMetadata = {
+          url,
+          timestamp,
+          sequence,
+          hash,
+          filename: logsFilename,
+          viewport,
+          fullPage: true
+        };
+
+        // logsデータを作成
+        const logsData: ScreenshotData = {
+          metadata,
+          imageBase64,
+          html: htmlContent
+        };
+
+        // 前回のスクリーンショットと比較
+        let evidenceData: ScreenshotData | undefined;
+        const previousScreenshotPath = await getLatestScreenshot(this.outputDir, hash);
+
+        if (previousScreenshotPath && sequence > 1) {
+          try {
+            const previousData = JSON.parse(await fs.readFile(previousScreenshotPath, 'utf-8')) as ScreenshotData;
+            const previousBuffer = base64ToBuffer(previousData.imageBase64);
+
+            const diffResult = await compareImages(screenshotBuffer, previousBuffer, 1.0);
+
+            // メタデータに差分情報を追加
+            metadata.hasDiff = diffResult.hasDiff;
+            metadata.diffPercentage = diffResult.diffPercentage;
+
+            // 差分がある場合のみevidenceデータを作成
+            if (diffResult.hasDiff) {
+              const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
+              const evidenceMetadata: ScreenshotMetadata = {
+                ...metadata,
+                filename: evidenceFilename,
+                logsFilename: logsFilename
+              };
+
+              evidenceData = {
+                metadata: evidenceMetadata,
+                imageBase64,
+                html: htmlContent
+              };
+            }
+          } catch (error) {
+            console.warn('Failed to compare with previous screenshot:', error);
+            metadata.hasDiff = true;
+            metadata.diffPercentage = 100;
+
+            const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
+            const evidenceMetadata: ScreenshotMetadata = {
+              ...metadata,
+              filename: evidenceFilename,
+              logsFilename: logsFilename
+            };
+
+            evidenceData = {
+              metadata: evidenceMetadata,
+              imageBase64,
+              html: htmlContent
+            };
+          }
+        } else {
+          // 初回の場合は必ずevidenceに保存
+          metadata.hasDiff = true;
+          metadata.diffPercentage = 100;
+
+          const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
+          const evidenceMetadata: ScreenshotMetadata = {
+            ...metadata,
+            filename: evidenceFilename,
+            logsFilename: logsFilename
+          };
+
+          evidenceData = {
+            metadata: evidenceMetadata,
+            imageBase64,
+            html: htmlContent
+          };
+        }
+
+        // ファイルに保存
+        await this.saveScreenshotData(logsData, 'logs');
+
+        if (evidenceData) {
+          await this.saveScreenshotData(evidenceData, 'evidence');
+          console.log(`📸 Screenshot saved (Diff: ${metadata.diffPercentage?.toFixed(2)}%)`);
+        } else {
+          console.log('📸 Screenshot saved (No significant changes)');
+        }
+
+        console.log(`📁 Files: ${logsFilename}${evidenceData ? ` | ${evidenceData.metadata.filename}` : ''}`);
+
+      } catch (error) {
+        console.error('❌ Screenshot error:', error);
+      }
+    });
+
+    // ページ終了関数を公開
+    await page.exposeFunction('exitInteractive', async () => {
+      console.log('🚪 Exit requested from browser');
+      await page.close();
+    });
+
+    // URLに移動
+    await page.goto(url, { waitUntil: 'networkidle' });
+
+    // キーボードショートカットを追加（ページ読み込み後に実行）
+    try {
+      console.log('🔧 Setting up keyboard shortcuts...');
+      
+      // 直接実行形式で試す
+      await page.addScriptTag({
+        content: `
+          console.log('Script injected, setting up shortcuts...');
+          document.addEventListener('keydown', function(e) {
+            console.log('Key pressed:', e.key, 'Ctrl:', e.ctrlKey);
+            if (e.ctrlKey && e.key === 's') {
+              e.preventDefault();
+              console.log('Taking screenshot...');
+              if (window.takeScreenshot) {
+                window.takeScreenshot();
+              } else {
+                console.error('takeScreenshot function not found');
+              }
+            }
+            if (e.ctrlKey && e.key === 'q') {
+              e.preventDefault();
+              console.log('Exit requested...');
+              if (window.exitInteractive) {
+                window.exitInteractive();
+              } else {
+                console.error('exitInteractive function not found');
+                // Fallback to window.close()
+                try {
+                  window.close();
+                } catch(err) {
+                  console.error('window.close() failed:', err);
+                }
+              }
+            }
+          });
+          console.log('Keyboard shortcuts registered successfully!');
+        `
+      });
+      
+      console.log('✅ Keyboard shortcuts injected via script tag');
+    } catch (error) {
+      console.error('❌ Failed to setup keyboard shortcuts:', error);
+    }
+
+    // ページクローズイベントを監視
+    page.once('close', () => {
+      console.log('\n👋 Interactive session ended');
+    });
+
+    // ブラウザクローズイベントを監視
+    if (this.browser) {
+      this.browser.on('disconnected', () => {
+        console.log('\n👋 Browser closed, exiting...');
+        process.exit(0);
+      });
+    }
+
+    console.log('✅ Interactive mode ready! Navigate and use keyboard shortcuts.');
+
+    // ブラウザが閉じられるまで待機
+    try {
+      await new Promise<void>((resolve) => {
+        const onClose = () => resolve();
+        page.once('close', onClose);
+      });
+    } finally {
+      if (!page.isClosed()) {
+        await page.close();
+      }
     }
   }
 

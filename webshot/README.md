@@ -6,6 +6,7 @@ PlaywrightでWebスクリーンショット撮影とエビデンス管理を行�
 
 - **Playwright**を使用した高品質なWebスクリーンショット撮影
 - **差分検出**による効率的なエビデンス管理
+- **インターラクティブモード**でリアルタイム操作とスクリーンショット撮影
 - **JSON形式**でのメタデータ保存（Base64画像データ含む）
 - **ハッシュ+連番**による体系的なファイル命名
 - **TypeScript**製で型安全
@@ -77,6 +78,31 @@ npx @infodb/webshot extract --input ./screenshots --output ./images
 npx @infodb/webshot extract --file ./screenshots/logs/12ab34cd_2024-01-01T12-00-00-000Z.json
 ```
 
+### インターラクティブモード
+
+```bash
+# ブラウザを表示してリアルタイム操作
+npx @infodb/webshot interactive https://example.com
+
+# 認証付きでインターラクティブモード
+npx @infodb/webshot interactive https://secure.example.com \
+  --auth-config ./auth-config.json
+
+# ビューポートサイズを指定
+npx @infodb/webshot interactive https://example.com \
+  --width 1920 \
+  --height 1080
+```
+
+#### インターラクティブモードの操作方法
+
+ブラウザが表示されたら：
+- **`Ctrl+S`**: 現在のページをスクリーンショット撮影
+- **`Ctrl+Q`**: インターラクティブモードを終了
+- **ブラウザウィンドウを閉じる**: インターラクティブモードを終了
+
+撮影されたスクリーンショットは通常の`capture`コマンドと同様に`logs/`と`evidence/`フォルダに保存され、差分検出も行われます。
+
 ### ログインフォーム解析と認証設定生成
 
 ```bash
@@ -121,6 +147,17 @@ npx @infodb/webshot analyze-auth https://example.com/login --headless
 - `-i, --input <dir>`: スクリーンショットディレクトリ（デフォルト: `./screenshots`）
 - `-o, --output <dir>`: 抽出画像の出力ディレクトリ（オプション）
 - `-f, --file <path>`: 単一JSONファイルから抽出（オプション）
+
+### `interactive` コマンド
+
+- `<url>`: 表示するWebページのURL（必須）
+- `-o, --output <dir>`: 出力ディレクトリ（デフォルト: `./screenshots`）
+- `-w, --width <number>`: ビューポート幅（デフォルト: `1280`）
+- `-h, --height <number>`: ビューポート高さ（デフォルト: `720`）
+- `--auth-config <path>`: 認証設定ファイルのパス
+- `--auth-type <type>`: 認証タイプ（basic|form|cookie|header）
+- `--username <username>`: 認証用ユーザー名
+- `--password <password>`: 認証用パスワード
 
 ### `analyze-auth` コマンド
 
@@ -302,6 +339,9 @@ npm run build
 
 # 開発モードで実行
 npm run dev capture https://example.com
+
+# インターラクティブモードで開発実行
+npm run dev interactive https://example.com
 
 # Playwrightブラウザのインストール
 npx playwright install chromium
