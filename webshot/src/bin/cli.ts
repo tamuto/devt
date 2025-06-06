@@ -152,31 +152,74 @@ program
       console.log(chalk.gray(`Directory: ${path.resolve(outputDir)}`));
       
       try {
-        const files = await fs.readdir(outputDir);
+        // Check for new folder structure first
+        const logsDir = path.join(outputDir, 'logs');
+        const evidenceDir = path.join(outputDir, 'evidence');
+        
+        let logFiles: string[] = [];
+        let evidenceFiles: string[] = [];
+        let useFolderStructure = false;
+        
+        try {
+          await fs.access(logsDir);
+          await fs.access(evidenceDir);
+          logFiles = await fs.readdir(logsDir);
+          evidenceFiles = await fs.readdir(evidenceDir);
+          useFolderStructure = true;
+        } catch {
+          // Fallback to old structure
+          const files = await fs.readdir(outputDir);
+          logFiles = files.filter(file => file.endsWith('_logs.json'));
+          evidenceFiles = files.filter(file => file.endsWith('_evidence.json'));
+        }
         
         if (url) {
           const hash = generateUrlHash(url);
-          const filteredFiles = files.filter(file => file.startsWith(hash));
+          
+          const filteredLogFiles = logFiles.filter(file => useFolderStructure ? file.startsWith(hash) : file.includes(hash));
+          const filteredEvidenceFiles = evidenceFiles.filter(file => useFolderStructure ? file.startsWith(hash) : file.includes(hash));
           
           console.log(chalk.cyan(`\n🔍 Screenshots for URL: ${url}`));
           console.log(chalk.cyan(`Hash: ${hash}`));
-          console.log(chalk.gray(`Files found: ${filteredFiles.length}`));
+          console.log(chalk.gray(`Log files found: ${filteredLogFiles.length}`));
+          console.log(chalk.gray(`Evidence files found: ${filteredEvidenceFiles.length}`));
           
-          for (const file of filteredFiles.sort()) {
-            console.log(chalk.white(`  - ${file}`));
+          if (useFolderStructure) {
+            console.log(chalk.white('\n📁 Logs folder:'));
+            for (const file of filteredLogFiles.sort()) {
+              console.log(chalk.white(`  - ${file}`));
+            }
+            console.log(chalk.white('\n📁 Evidence folder:'));
+            for (const file of filteredEvidenceFiles.sort()) {
+              console.log(chalk.white(`  - ${file}`));
+            }
+          } else {
+            for (const file of [...filteredLogFiles, ...filteredEvidenceFiles].sort()) {
+              console.log(chalk.white(`  - ${file}`));
+            }
           }
         } else {
-          const logFiles = files.filter(file => file.endsWith('_logs.json'));
-          const evidenceFiles = files.filter(file => file.endsWith('_evidence.json'));
-          
-          console.log(chalk.cyan(`\nTotal files: ${files.length}`));
+          console.log(chalk.cyan(`\nTotal files:`));
           console.log(chalk.white(`  - Logs: ${logFiles.length}`));
           console.log(chalk.white(`  - Evidence: ${evidenceFiles.length}`));
+          
+          if (useFolderStructure) {
+            console.log(chalk.cyan('\n📁 Folder structure: logs/ and evidence/'));
+          } else {
+            console.log(chalk.cyan('\n📁 Legacy structure: files with suffixes'));
+          }
           
           // ハッシュ別の統計を表示
           const hashStats = new Map<string, number>();
           for (const file of logFiles) {
-            const hash = file.substring(0, 8);
+            let hash: string;
+            if (useFolderStructure) {
+              // New structure: extract hash from filename like c984d06a_timestamp.json
+              hash = file.substring(0, 8);
+            } else {
+              // Old structure: extract hash from filename like hash_sequence_logs.json
+              hash = file.substring(0, 8);
+            }
             hashStats.set(hash, (hashStats.get(hash) || 0) + 1);
           }
           

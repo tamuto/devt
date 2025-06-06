@@ -32,7 +32,7 @@ export async function extractImageFromJson(
 }
 
 /**
- * 指定されたディレクトリ内のすべてのJSONファイルから画像を抽出
+ * 指定されたディレクトリ内のすべてのJSONファイルから画像を抽出 (フォルダ分離版対応)
  */
 export async function extractAllImages(
   screenshotsDir: string,
@@ -49,23 +49,55 @@ export async function extractAllImages(
     await fs.mkdir(outputDir, { recursive: true });
   }
   
-  // JSONファイルを検索
-  const files = await fs.readdir(screenshotsDir);
-  const jsonFiles = files.filter(file => file.endsWith('.json'));
-  
   const extractedFiles: string[] = [];
   
-  for (const jsonFile of jsonFiles) {
-    const jsonPath = path.join(screenshotsDir, jsonFile);
-    const imageName = jsonFile.replace('.json', '.png');
-    const imagePath = path.join(outputDir, imageName);
+  // logs と evidence フォルダの両方をチェック
+  const subDirs = ['logs', 'evidence'];
+  
+  for (const subDir of subDirs) {
+    const subDirPath = path.join(screenshotsDir, subDir);
     
     try {
-      await extractImageFromJson(jsonPath, imagePath);
-      extractedFiles.push(imagePath);
+      const files = await fs.readdir(subDirPath);
+      const jsonFiles = files.filter(file => file.endsWith('.json'));
+      
+      for (const jsonFile of jsonFiles) {
+        const jsonPath = path.join(subDirPath, jsonFile);
+        const imageName = `${subDir}_${jsonFile.replace('.json', '.png')}`;
+        const imagePath = path.join(outputDir, imageName);
+        
+        try {
+          await extractImageFromJson(jsonPath, imagePath);
+          extractedFiles.push(imagePath);
+        } catch (error) {
+          console.error(`Failed to extract ${jsonFile}:`, error);
+        }
+      }
     } catch (error) {
-      console.error(`Failed to extract ${jsonFile}:`, error);
+      // サブディレクトリが存在しない場合はスキップ
+      console.warn(`Directory ${subDirPath} not found, skipping...`);
     }
+  }
+  
+  // 後方互換性: 直接screenshotsDirにあるJSONファイルも処理
+  try {
+    const files = await fs.readdir(screenshotsDir);
+    const jsonFiles = files.filter(file => file.endsWith('.json'));
+    
+    for (const jsonFile of jsonFiles) {
+      const jsonPath = path.join(screenshotsDir, jsonFile);
+      const imageName = jsonFile.replace('.json', '.png');
+      const imagePath = path.join(outputDir, imageName);
+      
+      try {
+        await extractImageFromJson(jsonPath, imagePath);
+        extractedFiles.push(imagePath);
+      } catch (error) {
+        console.error(`Failed to extract ${jsonFile}:`, error);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to read root directory for legacy files:', error);
   }
   
   return extractedFiles;

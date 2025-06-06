@@ -11,6 +11,7 @@ export interface ScreenshotMetadata {
   fullPage: boolean;
   hasDiff?: boolean;
   diffPercentage?: number;
+  logsFilename?: string;
 }
 
 export interface ScreenshotData {

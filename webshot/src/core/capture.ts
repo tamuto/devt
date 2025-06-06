@@ -14,7 +14,8 @@ import {
   generateFilename,
   ensureDirectory,
   getNextSequence,
-  getLatestScreenshot
+  getLatestScreenshot,
+  getNextEvidenceSequence
 } from '../utils/file';
 import {
   compareImages,
@@ -69,10 +70,13 @@ export class WebScreenshotCapture {
 
     // 出力ディレクトリを作成
     await ensureDirectory(this.outputDir);
+    await ensureDirectory(path.join(this.outputDir, 'logs'));
+    await ensureDirectory(path.join(this.outputDir, 'evidence'));
 
     // URLハッシュと連番を生成
     const hash = generateUrlHash(url);
     const sequence = await getNextSequence(this.outputDir, hash);
+    const evidenceSequence = await getNextEvidenceSequence(this.outputDir, hash);
 
     // ページを作成
     const page = await this.browser.newPage();
@@ -114,13 +118,16 @@ export class WebScreenshotCapture {
       const imageBase64 = bufferToBase64(screenshotBuffer);
       const timestamp = new Date().toISOString();
 
+      // logsファイル名を生成
+      const logsFilename = generateFilename(hash, sequence, 'logs');
+      
       // メタデータを作成
       const metadata: ScreenshotMetadata = {
         url,
         timestamp,
         sequence,
         hash,
-        filename: generateFilename(hash, sequence, 'logs'),
+        filename: logsFilename,
         viewport,
         fullPage
       };
@@ -149,9 +156,11 @@ export class WebScreenshotCapture {
 
           // 差分がある場合のみevidenceデータを作成
           if (diffResult.hasDiff) {
+            const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
             const evidenceMetadata: ScreenshotMetadata = {
               ...metadata,
-              filename: generateFilename(hash, sequence, 'evidence')
+              filename: evidenceFilename,
+              logsFilename: logsFilename
             };
 
             evidenceData = {
@@ -166,9 +175,11 @@ export class WebScreenshotCapture {
           metadata.hasDiff = true;
           metadata.diffPercentage = 100;
           
+          const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
           const evidenceMetadata: ScreenshotMetadata = {
             ...metadata,
-            filename: generateFilename(hash, sequence, 'evidence')
+            filename: evidenceFilename,
+            logsFilename: logsFilename
           };
 
           evidenceData = {
@@ -182,9 +193,11 @@ export class WebScreenshotCapture {
         metadata.hasDiff = true;
         metadata.diffPercentage = 100;
         
+        const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
         const evidenceMetadata: ScreenshotMetadata = {
           ...metadata,
-          filename: generateFilename(hash, sequence, 'evidence')
+          filename: evidenceFilename,
+          logsFilename: logsFilename
         };
 
         evidenceData = {
@@ -301,10 +314,11 @@ export class WebScreenshotCapture {
   }
 
   /**
-   * スクリーンショットデータをファイルに保存
+   * スクリーンショットデータをファイルに保存 (フォルダ分離版)
    */
   private async saveScreenshotData(data: ScreenshotData, type: 'logs' | 'evidence'): Promise<void> {
-    const filePath = path.join(this.outputDir, data.metadata.filename);
+    const folderPath = path.join(this.outputDir, type);
+    const filePath = path.join(folderPath, data.metadata.filename);
     await fs.writeFile(filePath, JSON.stringify(data, null, 2));
   }
 }

@@ -3,38 +3,13 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 /**
- * URLからハッシュを生成
+ * evidenceフォルダで次の連番を取得（ハッシュ別）
  */
-export function generateUrlHash(url: string): string {
-  return crypto.createHash('md5').update(url).digest('hex').substring(0, 8);
-}
-
-/**
- * 連番付きファイル名を生成
- */
-export function generateFilename(hash: string, sequence: number, type: 'logs' | 'evidence'): string {
-  const paddedSequence = sequence.toString().padStart(4, '0');
-  return `${hash}_${paddedSequence}_${type}.json`;
-}
-
-/**
- * ディレクトリを確実に作成
- */
-export async function ensureDirectory(dirPath: string): Promise<void> {
+export async function getNextEvidenceSequence(outputDir: string, hash: string): Promise<number> {
   try {
-    await fs.access(dirPath);
-  } catch {
-    await fs.mkdir(dirPath, { recursive: true });
-  }
-}
-
-/**
- * 既存ファイルから次の連番を取得
- */
-export async function getNextSequence(outputDir: string, hash: string): Promise<number> {
-  try {
-    const files = await fs.readdir(outputDir);
-    const pattern = new RegExp(`^${hash}_(\\d{4})_`);
+    const evidenceDir = path.join(outputDir, 'evidence');
+    const files = await fs.readdir(evidenceDir).catch(() => []);
+    const pattern = new RegExp(`^${hash}_(\\d{3})\\.json$`);
     
     let maxSequence = 0;
     for (const file of files) {
@@ -52,28 +27,82 @@ export async function getNextSequence(outputDir: string, hash: string): Promise<
 }
 
 /**
- * 最新のスクリーンショットファイルを取得
+ * URLからハッシュを生成
+ */
+export function generateUrlHash(url: string): string {
+  return crypto.createHash('md5').update(url).digest('hex').substring(0, 8);
+}
+
+/**
+ * ファイル名を生成 (フォルダ分離版)
+ */
+export function generateFilename(hash: string, sequence: number, type: 'logs' | 'evidence'): string {
+  if (type === 'evidence') {
+    return `${hash}_${sequence.toString().padStart(3, '0')}.json`;
+  } else {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return `${hash}_${timestamp}.json`;
+  }
+}
+
+/**
+ * ディレクトリを確実に作成
+ */
+export async function ensureDirectory(dirPath: string): Promise<void> {
+  try {
+    await fs.access(dirPath);
+  } catch {
+    await fs.mkdir(dirPath, { recursive: true });
+  }
+}
+
+/**
+ * 既存ファイルから次の連番を取得 (フォルダ分離版)
+ */
+export async function getNextSequence(outputDir: string, hash: string): Promise<number> {
+  try {
+    // logsフォルダ内のファイルを確認
+    const logsDir = path.join(outputDir, 'logs');
+    const files = await fs.readdir(logsDir).catch(() => []);
+    const pattern = new RegExp(`^${hash}_.*\.json$`);
+    
+    let count = 0;
+    for (const file of files) {
+      if (pattern.test(file)) {
+        count++;
+      }
+    }
+    
+    return count + 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * 最新のスクリーンショットファイルを取得 (フォルダ分離版)
  */
 export async function getLatestScreenshot(outputDir: string, hash: string): Promise<string | null> {
   try {
-    const files = await fs.readdir(outputDir);
-    const pattern = new RegExp(`^${hash}_(\\d{4})_logs\\.json$`);
+    const logsDir = path.join(outputDir, 'logs');
+    const files = await fs.readdir(logsDir).catch(() => []);
+    const pattern = new RegExp(`^${hash}_.*\.json$`);
     
     let latestFile: string | null = null;
-    let maxSequence = 0;
+    let latestTime = 0;
     
     for (const file of files) {
-      const match = file.match(pattern);
-      if (match) {
-        const sequence = parseInt(match[1], 10);
-        if (sequence > maxSequence) {
-          maxSequence = sequence;
+      if (pattern.test(file)) {
+        const filePath = path.join(logsDir, file);
+        const stats = await fs.stat(filePath);
+        if (stats.mtime.getTime() > latestTime) {
+          latestTime = stats.mtime.getTime();
           latestFile = file;
         }
       }
     }
     
-    return latestFile ? path.join(outputDir, latestFile) : null;
+    return latestFile ? path.join(logsDir, latestFile) : null;
   } catch {
     return null;
   }

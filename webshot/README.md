@@ -74,7 +74,7 @@ npx @infodb/webshot extract --input ./screenshots
 npx @infodb/webshot extract --input ./screenshots --output ./images
 
 # 単一ファイルから抽出
-npx @infodb/webshot extract --file ./screenshots/hash_0001_logs.json
+npx @infodb/webshot extract --file ./screenshots/logs/12ab34cd_2024-01-01T12-00-00-000Z.json
 ```
 
 ### ログインフォーム解析と認証設定生成
@@ -134,20 +134,29 @@ npx @infodb/webshot analyze-auth https://example.com/login --headless
 
 ```
 screenshots/
-├── 12ab34cd_0001_logs.json      # 全スクリーンショット（ログ用）
-├── 12ab34cd_0001_evidence.json  # 差分のみ（エビデンス用）
-├── 12ab34cd_0002_logs.json
-└── ef56gh78_0001_logs.json      # 別URL
+├── logs/
+│   ├── 12ab34cd_2024-01-01T12-00-00-000Z.json  # 全スクリーンショット（ログ用）
+│   ├── 12ab34cd_2024-01-01T12-05-00-000Z.json
+│   └── ef56gh78_2024-01-01T12-10-00-000Z.json  # 別URL
+├── evidence/
+│   ├── 12ab34cd_001.json                       # 差分のみ（エビデンス用）
+│   ├── 12ab34cd_002.json
+│   └── ef56gh78_001.json                       # 別URL
+└── extracted/                                  # 抽出されたPNG画像
+    ├── logs_12ab34cd_2024-01-01T12-00-00-000Z.png
+    └── evidence_12ab34cd_001.png
 ```
 
 ### ファイル命名規則
 
 - **ハッシュ**: URLのMD5ハッシュの最初の8文字
-- **連番**: 4桁のゼロパディング（撮影順序を維持）
-- **タイプ**: `logs`（全記録）または `evidence`（差分のみ）
+- **Logsフォルダ**: `{hash}_{timestamp}.json` 形式（時系列順）
+- **Evidenceフォルダ**: `{hash}_{3桁連番}.json` 形式（差分検出時のみ保存）
+- **フォルダ分離**: `logs/`と`evidence/`でファイル種別を管理
 
 ## JSONファイル構造
 
+### Logsファイル例
 ```json
 {
   "metadata": {
@@ -155,7 +164,7 @@ screenshots/
     "timestamp": "2024-01-01T12:00:00.000Z",
     "sequence": 1,
     "hash": "12ab34cd",
-    "filename": "12ab34cd_0001_logs.json",
+    "filename": "12ab34cd_2024-01-01T12-00-00-000Z.json",
     "viewport": {
       "width": 1280,
       "height": 720
@@ -164,18 +173,48 @@ screenshots/
     "hasDiff": true,
     "diffPercentage": 5.23
   },
-  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA..."
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "html": "<html>...</html>"
+}
+```
+
+### Evidenceファイル例
+```json
+{
+  "metadata": {
+    "url": "https://example.com",
+    "timestamp": "2024-01-01T12:00:00.000Z",
+    "sequence": 1,
+    "hash": "12ab34cd",
+    "filename": "12ab34cd_001.json",
+    "logsFilename": "12ab34cd_2024-01-01T12-00-00-000Z.json",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "fullPage": true,
+    "hasDiff": true,
+    "diffPercentage": 5.23
+  },
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "html": "<html>...</html>"
 }
 ```
 
 ## 差分検出の仕組み
 
-1. **初回撮影**: 必ず`logs`と`evidence`両方に保存
-2. **2回目以降**: 前回と比較して差分を検出
-   - 差分が閾値以上: `logs`と`evidence`両方に保存
-   - 差分が閾値未満: `logs`のみに保存（`evidence`は作成しない）
+1. **初回撮影**: 必ず`logs/`と`evidence/`両方のフォルダに保存
+2. **2回目以降**: 前回のlogsと比較して差分を検出
+   - 差分が閾値以上: `logs/`と`evidence/`両方に保存
+   - 差分が閾値未満: `logs/`のみに保存（`evidence/`には作成しない）
 
-これにより、`evidence`フォルダには**意味のある変更があった場合のみ**スクリーンショットが保存されます。
+これにより、`evidence/`フォルダには**意味のある変更があった場合のみ**スクリーンショットが保存されます。
+
+### ファイル間の関連性
+
+- **Evidenceファイルのメタデータ**には、対応する`logsFilename`が記録される
+- 同一URLのファイルは同じハッシュプレフィックスで識別可能
+- `logs/`は時系列順、`evidence/`は差分検出順で管理される
 
 ## 認証設定
 
