@@ -16,6 +16,7 @@ export interface ScreenshotMetadata {
 export interface ScreenshotData {
   metadata: ScreenshotMetadata;
   imageBase64: string;
+  html?: string;
 }
 
 export interface CaptureOptions {

@@ -108,6 +108,9 @@ export class WebScreenshotCapture {
         type: 'png'
       });
 
+      // HTMLコンテンツを取得
+      const htmlContent = await page.content();
+
       const imageBase64 = bufferToBase64(screenshotBuffer);
       const timestamp = new Date().toISOString();
 
@@ -125,7 +128,8 @@ export class WebScreenshotCapture {
       // logsデータを作成
       const logsData: ScreenshotData = {
         metadata,
-        imageBase64
+        imageBase64,
+        html: htmlContent
       };
 
       // 前回のスクリーンショットと比較
@@ -152,7 +156,8 @@ export class WebScreenshotCapture {
 
             evidenceData = {
               metadata: evidenceMetadata,
-              imageBase64
+              imageBase64,
+              html: htmlContent
             };
           }
         } catch (error) {
@@ -168,7 +173,8 @@ export class WebScreenshotCapture {
 
           evidenceData = {
             metadata: evidenceMetadata,
-            imageBase64
+            imageBase64,
+            html: htmlContent
           };
         }
       } else {
@@ -183,7 +189,8 @@ export class WebScreenshotCapture {
 
         evidenceData = {
           metadata: evidenceMetadata,
-          imageBase64
+          imageBase64,
+          html: htmlContent
         };
       }
 
