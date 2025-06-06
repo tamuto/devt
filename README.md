@@ -7,7 +7,6 @@ Collection of developer testing tools.
 ### unittest - Python Unit Testing Framework
 [![PyPI version](https://badge.fury.io/py/devt.svg)](https://badge.fury.io/py/devt)
 
-- **Version**: 0.1.1
 - **Language**: Python 3.9+
 - **Status**: ✅ Published on PyPI
 - **Installation**: `pip install devt`
@@ -15,21 +14,20 @@ Collection of developer testing tools.
 See [unittest/README.md](./unittest/README.md) for details.
 
 ### @infodb/webshot - Web Screenshot Tool
-[![npm version](https://img.shields.io/badge/npm-v1.0.0-orange)](https://www.npmjs.com/package/@infodb/webshot)
+[![npm version](https://badge.fury.io/js/%40infodb%2Fwebshot.svg)](https://badge.fury.io/js/%40infodb%2Fwebshot)
 
-- **Version**: 1.0.0
 - **Language**: TypeScript/Node.js
-- **Status**: 🚧 Preparing for npm publication
-- **Installation**: `npm install -g @infodb/webshot` (coming soon)
+- **Status**: ✅ Published on npm
+- **Installation**: `npm install -g @infodb/webshot`
 
 See [webshot/README.md](./webshot/README.md) for details.
 
 ## Package Status
 
-| Tool | Version | Registry | Status |
-|------|---------|----------|--------|
-| devt | 0.1.1 | PyPI | [![PyPI](https://img.shields.io/pypi/v/devt?color=green)](https://pypi.org/project/devt/) |
-| @infodb/webshot | 1.0.0 | npm | [![npm](https://img.shields.io/badge/npm-pending-orange)](https://www.npmjs.com/package/@infodb/webshot) |
+| Tool | Registry | Status |
+|------|----------|--------|
+| devt | PyPI | [![PyPI](https://img.shields.io/pypi/v/devt?color=green)](https://pypi.org/project/devt/) |
+| @infodb/webshot | npm | [![npm](https://badge.fury.io/js/%40infodb%2Fwebshot.svg)](https://badge.fury.io/js/%40infodb%2Fwebshot) |
 
 ## License
 
