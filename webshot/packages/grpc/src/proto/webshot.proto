@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package webshot;
+
+service WebshotService {
+  rpc CaptureScreenshot(CaptureRequest) returns (CaptureResponse);
+  rpc CaptureScreenshotStream(stream CaptureRequest) returns (stream CaptureResponse);
+  rpc GetCaptureInfo(InfoRequest) returns (InfoResponse);
+}
+
+message CaptureRequest {
+  string url = 1;
+  string output_dir = 2;
+  string prefix = 3;
+  AuthenticationOptions auth = 4;
+  CaptureOptions options = 5;
+}
+
+message CaptureResponse {
+  bool success = 1;
+  string message = 2;
+  string screenshot_path = 3;
+  string evidence_path = 4;
+  DiffResult diff_result = 5;
+}
+
+message AuthenticationOptions {
+  AuthType type = 1;
+  map<string, string> credentials = 2;
+  repeated Cookie cookies = 3;
+  map<string, string> headers = 4;
+}
+
+enum AuthType {
+  NONE = 0;
+  BASIC = 1;
+  FORM = 2;
+  COOKIE = 3;
+  HEADER = 4;
+}
+
+message Cookie {
+  string name = 1;
+  string value = 2;
+  string domain = 3;
+  string path = 4;
+}
+
+message CaptureOptions {
+  int32 viewport_width = 1;
+  int32 viewport_height = 2;
+  bool full_page = 3;
+  int32 timeout = 4;
+  double diff_threshold = 5;
+}
+
+message DiffResult {
+  bool has_diff = 1;
+  int32 diff_pixels = 2;
+  double diff_percentage = 3;
+}
+
+message InfoRequest {
+  string hash_prefix = 1;
+  string directory = 2;
+}
+
+message InfoResponse {
+  repeated ScreenshotInfo screenshots = 1;
+  int32 total_count = 2;
+  int32 evidence_count = 3;
+}
+
+message ScreenshotInfo {
+  string filename = 1;
+  string timestamp = 2;
+  string url = 3;
+  bool has_evidence = 4;
+}

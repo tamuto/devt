@@ -2,35 +2,84 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Structure
+
+This is a monorepo containing three packages for web screenshot capture with diff detection:
+
+```
+webshot/
+├── packages/
+│   ├── core/               # @infodb/webshot (main CLI tool)
+│   ├── grpc/               # @infodb/webshot-grpc (gRPC adapter)
+│   └── mcp/                # @infodb/webshot-mcp (MCP adapter)
+├── package.json            # Root package.json (monorepo)
+├── pnpm-workspace.yaml     # pnpm workspace configuration
+└── CLAUDE.md               # This file
+```
+
 ## Development Commands
 
-- **Build**: `npm run build` - Compiles TypeScript to dist/ directory
-- **Development**: `npm run dev capture <url>` - Run CLI in development mode with ts-node
-- **Install dependencies**: `npm install`
-- **Install Playwright browsers**: `npx playwright install chromium`
+### Root Level (Monorepo)
+- **Install all dependencies**: `pnpm install`
+- **Build all packages**: `pnpm run build`
+- **Clean all packages**: `pnpm run clean`
+- **Run tests for all packages**: `pnpm run test`
+
+### Core Package (@infodb/webshot)
+- **Build core**: `pnpm --filter @infodb/webshot build`
+- **Development**: `pnpm --filter @infodb/webshot dev capture <url>`
+- **Install Playwright browsers**: `pnpm --filter @infodb/webshot exec npx playwright install chromium`
+
+### gRPC Package (@infodb/webshot-grpc)
+- **Build gRPC**: `pnpm --filter @infodb/webshot-grpc build`
+- **Start gRPC server**: `pnpm --filter @infodb/webshot-grpc dev`
+- **Generate proto files**: `pnpm --filter @infodb/webshot-grpc run build:proto`
+
+### MCP Package (@infodb/webshot-mcp)
+- **Build MCP**: `pnpm --filter @infodb/webshot-mcp build`
+- **Start MCP server**: `pnpm --filter @infodb/webshot-mcp dev`
 
 ## Architecture Overview
 
-This is a CLI tool for capturing web screenshots with diff detection using Playwright. The project is structured around three main concepts:
+### Package Responsibilities
 
-### Core Components
+#### @infodb/webshot (Core)
+Main CLI tool and core library functionality:
 
-1. **WebScreenshotCapture** (`src/core/capture.ts`) - Main orchestrator class that:
+1. **WebScreenshotCapture** (`packages/core/src/core/capture.ts`) - Main orchestrator class that:
    - Manages Playwright browser lifecycle
    - Handles the screenshot capture flow
    - Performs diff detection against previous screenshots
    - Saves both "logs" (all screenshots) and "evidence" (only changed screenshots)
 
-2. **AuthenticationHandler** (`src/core/auth.ts`) - Handles various authentication methods:
+2. **AuthenticationHandler** (`packages/core/src/core/auth.ts`) - Handles various authentication methods:
    - Basic HTTP authentication
    - Form-based login flows
    - Cookie-based authentication
    - Custom header authentication
 
-3. **CLI Interface** (`src/bin/cli.ts`) - Commander.js-based CLI with three commands:
+3. **CLI Interface** (`packages/core/src/bin/cli.ts`) - Commander.js-based CLI with three commands:
    - `capture` - Take screenshots with diff detection
    - `extract` - Export PNG images from JSON files
    - `info` - Display statistics about captured screenshots
+
+#### @infodb/webshot-grpc (gRPC Adapter)
+Remote API access via gRPC:
+
+1. **WebshotGrpcServer** (`packages/grpc/src/server.ts`) - gRPC server implementation
+2. **WebshotGrpcClient** (`packages/grpc/src/client.ts`) - gRPC client library
+3. **Protocol Definitions** (`packages/grpc/src/proto/webshot.proto`) - gRPC service definitions
+4. **CLI Server** (`packages/grpc/src/bin/server.ts`) - Standalone gRPC server
+
+#### @infodb/webshot-mcp (MCP Adapter)
+Model Context Protocol integration for AI/LLM tools:
+
+1. **FastMCP Server** (`packages/mcp/src/server.ts`) - MCP protocol implementation
+2. **Tool Handlers** (`packages/mcp/src/handlers/`) - Individual tool implementations
+   - `capture.ts` - Screenshot capture handler
+   - `extract.ts` - Image extraction handler
+   - `info.ts` - Information retrieval handler
+3. **CLI Server** (`packages/mcp/src/bin/server.ts`) - Standalone MCP server
 
 ### Key Design Patterns
 
@@ -42,28 +91,38 @@ This is a CLI tool for capturing web screenshots with diff detection using Playw
 
 **Diff Detection**: Uses pixelmatch library to compare PNG data between current and previous screenshots. Only saves to "evidence" when changes exceed the configured threshold.
 
-### File Structure
-
-- `src/types/` - TypeScript interfaces for ScreenshotData, AuthenticationOptions, etc.
-- `src/utils/` - Utility functions for file operations, image processing, and auth config
-- `examples/` - Sample authentication configuration files
-- `dist/` - Compiled JavaScript output (built from TypeScript)
+**Workspace Dependencies**: Core package is shared across gRPC and MCP adapters using `workspace:*` dependency notation.
 
 ### Dependencies
 
+#### Core Package
 - **Playwright**: Web automation and screenshot capture
 - **pixelmatch + pngjs**: Image diffing and PNG processing
 - **commander**: CLI argument parsing
 - **chalk**: Terminal colors and formatting
 
-The codebase is fully TypeScript with strict typing enabled and follows a modular architecture separating concerns between CLI, core logic, authentication, and utilities.
+#### gRPC Package
+- **@grpc/grpc-js**: gRPC Node.js implementation
+- **@grpc/proto-loader**: Protocol buffer loader
+- **grpc-tools**: Protocol buffer compiler
 
-## Future Development Tasks
+#### MCP Package
+- **fastmcp**: Lightweight MCP server implementation
+- **pngjs**: PNG processing for image extraction
 
-### Authentication Enhancements
+## Development Guidelines
 
-1. **Cognito Managed Login Support**: Add support for AWS Cognito hosted UI authentication flows
-   - Handle OAuth2/OIDC redirects
-   - JWT token extraction and cookie management
-   - Support for federated identity providers
-   - Consider cookie-based auth instead of form-based for managed logins
+1. **Workspace Commands**: Use `pnpm --filter <package-name>` to run commands on specific packages
+2. **Inter-package Dependencies**: Core package exports are available to adapter packages
+3. **Build Order**: Core package should be built before adapter packages
+4. **Testing**: Each package should have its own test suite
+5. **Documentation**: Each package should have its own README.md
+
+## Publishing
+
+The packages are intended to be published separately:
+- `@infodb/webshot` - Main CLI tool
+- `@infodb/webshot-grpc` - gRPC adapter
+- `@infodb/webshot-mcp` - MCP adapter
+
+All packages follow semantic versioning and can be released independently.

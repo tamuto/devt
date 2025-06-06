@@ -1,0 +1,46 @@
+{
+  "name": "@infodb/webshot-mcp",
+  "version": "1.0.0",
+  "description": "MCP (Model Context Protocol) adapter for webshot screenshot capture",
+  "main": "dist/index.js",
+  "bin": {
+    "webshot-mcp-server": "dist/bin/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/bin/server.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "screenshot",
+    "webshot",
+    "ai",
+    "llm"
+  ],
+  "author": "infodb",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@infodb/webshot": "workspace:*",
+    "fastmcp": "^2.2.2",
+    "pngjs": "^7.0.0",
+    "zod": "^3.25.55"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^5.8.3",
+    "ts-node": "^10.9.2"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
