@@ -11,7 +11,6 @@ export interface ScreenshotMetadata {
   fullPage: boolean;
   hasDiff?: boolean;
   diffPercentage?: number;
-  logsFilename?: string;
 }
 
 export interface ScreenshotData {
@@ -23,6 +22,7 @@ export interface ScreenshotData {
 export interface CaptureOptions {
   url: string;
   outputDir?: string;
+  prefix?: string; // カスタムプレフィックス（指定時はハッシュの代わりに使用）
   viewport?: {
     width: number;
     height: number;

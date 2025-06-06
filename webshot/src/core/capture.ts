@@ -14,8 +14,7 @@ import {
   generateFilename,
   ensureDirectory,
   getNextSequence,
-  getLatestScreenshot,
-  getNextEvidenceSequence
+  getLatestScreenshot
 } from '../utils/file';
 import {
   compareImages,
@@ -52,16 +51,14 @@ export class WebScreenshotCapture {
   /**
    * スクリーンショットを撮影（認証対応）
    */
-  async capture(options: CaptureOptionsWithAuth): Promise<{
-    logsData: ScreenshotData;
-    evidenceData?: ScreenshotData;
-  }> {
+  async capture(options: CaptureOptionsWithAuth): Promise<ScreenshotData> {
     if (!this.browser) {
       throw new Error('Browser not initialized. Call init() first.');
     }
 
     const {
       url,
+      prefix,
       viewport = { width: 1280, height: 720 },
       fullPage = true,
       diffThreshold = 1.0,
@@ -70,13 +67,10 @@ export class WebScreenshotCapture {
 
     // 出力ディレクトリを作成
     await ensureDirectory(this.outputDir);
-    await ensureDirectory(path.join(this.outputDir, 'logs'));
-    await ensureDirectory(path.join(this.outputDir, 'evidence'));
 
-    // URLハッシュと連番を生成
-    const hash = generateUrlHash(url);
-    const sequence = await getNextSequence(this.outputDir, hash);
-    const evidenceSequence = await getNextEvidenceSequence(this.outputDir, hash);
+    // ファイル名の識別子を決定（prefix指定時はprefixを使用、未指定時はURLハッシュ）
+    const identifier = prefix || generateUrlHash(url);
+    const sequence = await getNextSequence(this.outputDir, identifier);
 
     // ページを作成
     const page = await this.browser.newPage();
@@ -118,30 +112,29 @@ export class WebScreenshotCapture {
       const imageBase64 = bufferToBase64(screenshotBuffer);
       const timestamp = new Date().toISOString();
 
-      // logsファイル名を生成
-      const logsFilename = generateFilename(hash, sequence, 'logs');
+      // ファイル名を生成
+      const filename = generateFilename(identifier, sequence);
       
       // メタデータを作成
       const metadata: ScreenshotMetadata = {
         url,
         timestamp,
         sequence,
-        hash,
-        filename: logsFilename,
+        hash: prefix ? identifier : generateUrlHash(url),
+        filename,
         viewport,
         fullPage
       };
 
-      // logsデータを作成
-      const logsData: ScreenshotData = {
+      // スクリーンショットデータを作成
+      const screenshotData: ScreenshotData = {
         metadata,
         imageBase64,
         html: htmlContent
       };
 
       // 前回のスクリーンショットと比較
-      let evidenceData: ScreenshotData | undefined;
-      const previousScreenshotPath = await getLatestScreenshot(this.outputDir, hash);
+      const previousScreenshotPath = await getLatestScreenshot(this.outputDir, identifier);
       
       if (previousScreenshotPath && sequence > 1) {
         try {
@@ -153,71 +146,22 @@ export class WebScreenshotCapture {
           // メタデータに差分情報を追加
           metadata.hasDiff = diffResult.hasDiff;
           metadata.diffPercentage = diffResult.diffPercentage;
-
-          // 差分がある場合のみevidenceデータを作成
-          if (diffResult.hasDiff) {
-            const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
-            const evidenceMetadata: ScreenshotMetadata = {
-              ...metadata,
-              filename: evidenceFilename,
-              logsFilename: logsFilename
-            };
-
-            evidenceData = {
-              metadata: evidenceMetadata,
-              imageBase64,
-              html: htmlContent
-            };
-          }
         } catch (error) {
           console.warn('Failed to compare with previous screenshot:', error);
           // 比較に失敗した場合は差分ありとして扱う
           metadata.hasDiff = true;
           metadata.diffPercentage = 100;
-          
-          const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
-          const evidenceMetadata: ScreenshotMetadata = {
-            ...metadata,
-            filename: evidenceFilename,
-            logsFilename: logsFilename
-          };
-
-          evidenceData = {
-            metadata: evidenceMetadata,
-            imageBase64,
-            html: htmlContent
-          };
         }
       } else {
-        // 初回の場合は必ずevidenceに保存
+        // 初回の場合
         metadata.hasDiff = true;
         metadata.diffPercentage = 100;
-        
-        const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
-        const evidenceMetadata: ScreenshotMetadata = {
-          ...metadata,
-          filename: evidenceFilename,
-          logsFilename: logsFilename
-        };
-
-        evidenceData = {
-          metadata: evidenceMetadata,
-          imageBase64,
-          html: htmlContent
-        };
       }
 
       // ファイルに保存
-      await this.saveScreenshotData(logsData, 'logs');
-      
-      if (evidenceData) {
-        await this.saveScreenshotData(evidenceData, 'evidence');
-      }
+      await this.saveScreenshotData(screenshotData);
 
-      return {
-        logsData,
-        evidenceData
-      };
+      return screenshotData;
 
     } finally {
       await page.close();
@@ -329,8 +273,6 @@ export class WebScreenshotCapture {
 
     // 出力ディレクトリを作成
     await ensureDirectory(this.outputDir);
-    await ensureDirectory(path.join(this.outputDir, 'logs'));
-    await ensureDirectory(path.join(this.outputDir, 'evidence'));
 
     console.log('🚀 Starting interactive mode...');
     console.log('📋 Controls:');
@@ -352,9 +294,9 @@ export class WebScreenshotCapture {
     // スクリーンショット撮影関数を公開
     await page.exposeFunction('takeScreenshot', async () => {
       try {
-        const hash = generateUrlHash(url);
-        const sequence = await getNextSequence(this.outputDir, hash);
-        const evidenceSequence = await getNextEvidenceSequence(this.outputDir, hash);
+        // ファイル名の識別子を決定（prefix指定時はprefixを使用、未指定時はURLハッシュ）
+        const identifier = options.prefix || generateUrlHash(url);
+        const sequence = await getNextSequence(this.outputDir, identifier);
 
         // 複合アプローチで描画完了を待機
         await this.waitForCompleteRender(page);
@@ -370,30 +312,29 @@ export class WebScreenshotCapture {
         const imageBase64 = bufferToBase64(screenshotBuffer);
         const timestamp = new Date().toISOString();
 
-        // logsファイル名を生成
-        const logsFilename = generateFilename(hash, sequence, 'logs');
+        // ファイル名を生成
+        const filename = generateFilename(identifier, sequence);
 
         // メタデータを作成
         const metadata: ScreenshotMetadata = {
           url,
           timestamp,
           sequence,
-          hash,
-          filename: logsFilename,
+          hash: options.prefix ? identifier : generateUrlHash(url),
+          filename,
           viewport,
           fullPage: true
         };
 
-        // logsデータを作成
-        const logsData: ScreenshotData = {
+        // スクリーンショットデータを作成
+        const screenshotData: ScreenshotData = {
           metadata,
           imageBase64,
           html: htmlContent
         };
 
         // 前回のスクリーンショットと比較
-        let evidenceData: ScreenshotData | undefined;
-        const previousScreenshotPath = await getLatestScreenshot(this.outputDir, hash);
+        const previousScreenshotPath = await getLatestScreenshot(this.outputDir, identifier);
 
         if (previousScreenshotPath && sequence > 1) {
           try {
@@ -405,70 +346,22 @@ export class WebScreenshotCapture {
             // メタデータに差分情報を追加
             metadata.hasDiff = diffResult.hasDiff;
             metadata.diffPercentage = diffResult.diffPercentage;
-
-            // 差分がある場合のみevidenceデータを作成
-            if (diffResult.hasDiff) {
-              const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
-              const evidenceMetadata: ScreenshotMetadata = {
-                ...metadata,
-                filename: evidenceFilename,
-                logsFilename: logsFilename
-              };
-
-              evidenceData = {
-                metadata: evidenceMetadata,
-                imageBase64,
-                html: htmlContent
-              };
-            }
           } catch (error) {
             console.warn('Failed to compare with previous screenshot:', error);
             metadata.hasDiff = true;
             metadata.diffPercentage = 100;
-
-            const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
-            const evidenceMetadata: ScreenshotMetadata = {
-              ...metadata,
-              filename: evidenceFilename,
-              logsFilename: logsFilename
-            };
-
-            evidenceData = {
-              metadata: evidenceMetadata,
-              imageBase64,
-              html: htmlContent
-            };
           }
         } else {
-          // 初回の場合は必ずevidenceに保存
+          // 初回の場合
           metadata.hasDiff = true;
           metadata.diffPercentage = 100;
-
-          const evidenceFilename = generateFilename(hash, evidenceSequence, 'evidence');
-          const evidenceMetadata: ScreenshotMetadata = {
-            ...metadata,
-            filename: evidenceFilename,
-            logsFilename: logsFilename
-          };
-
-          evidenceData = {
-            metadata: evidenceMetadata,
-            imageBase64,
-            html: htmlContent
-          };
         }
 
         // ファイルに保存
-        await this.saveScreenshotData(logsData, 'logs');
+        await this.saveScreenshotData(screenshotData);
 
-        if (evidenceData) {
-          await this.saveScreenshotData(evidenceData, 'evidence');
-          console.log(`📸 Screenshot saved (Diff: ${metadata.diffPercentage?.toFixed(2)}%)`);
-        } else {
-          console.log('📸 Screenshot saved (No significant changes)');
-        }
-
-        console.log(`📁 Files: ${logsFilename}${evidenceData ? ` | ${evidenceData.metadata.filename}` : ''}`);
+        console.log(`📸 Screenshot saved (Diff: ${metadata.diffPercentage?.toFixed(2)}%)`);
+        console.log(`📁 File: ${filename}`);
 
       } catch (error) {
         console.error('❌ Screenshot error:', error);
@@ -557,11 +450,10 @@ export class WebScreenshotCapture {
   }
 
   /**
-   * スクリーンショットデータをファイルに保存 (フォルダ分離版)
+   * スクリーンショットデータをファイルに保存 (統一版)
    */
-  private async saveScreenshotData(data: ScreenshotData, type: 'logs' | 'evidence'): Promise<void> {
-    const folderPath = path.join(this.outputDir, type);
-    const filePath = path.join(folderPath, data.metadata.filename);
+  private async saveScreenshotData(data: ScreenshotData): Promise<void> {
+    const filePath = path.join(this.outputDir, data.metadata.filename);
     await fs.writeFile(filePath, JSON.stringify(data, null, 2));
   }
 }
