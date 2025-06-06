@@ -1,14 +1,15 @@
 # @infodb/webshot
 
-PlaywrightでWebスクリーンショット撮影とエビデンス管理を行うCLIツール
+PlaywrightでWebスクリーンショット撮影と差分検出を行うCLIツール
 
 ## 特徴
 
 - **Playwright**を使用した高品質なWebスクリーンショット撮影
-- **差分検出**による効率的なエビデンス管理
+- **差分検出**による変更の自動判定
 - **インターラクティブモード**でリアルタイム操作とスクリーンショット撮影
 - **JSON形式**でのメタデータ保存（Base64画像データ含む）
-- **ハッシュ+連番**による体系的なファイル命名
+- **柔軟なファイル命名**（URLハッシュまたはカスタムプレフィックス）
+- **環境変数サポート**で設定の外部化が可能
 - **TypeScript**製で型安全
 
 ## インストール
@@ -25,12 +26,21 @@ npm install -g @infodb/webshot
 # 基本的な使用方法
 npx @infodb/webshot capture https://example.com
 
+# カスタムプレフィックスを使用
+npx @infodb/webshot capture https://example.com \
+  --prefix mysite
+
 # オプション付きで実行
 npx @infodb/webshot capture https://example.com \
   --output ./my-screenshots \
   --width 1920 \
   --height 1080 \
   --threshold 2.0
+
+# 環境変数を使用
+export WEBSHOT_OUTPUT_DIR=./my-screenshots
+export WEBSHOT_PREFIX=myproject
+npx @infodb/webshot capture https://example.com
 ```
 
 ### 認証が必要なサイトの撮影
@@ -42,7 +52,7 @@ npx @infodb/webshot capture https://secure.example.com \
   --username myuser \
   --password mypass
 
-# 環境変数を使用
+# 環境変数を使用（Basic認証）
 export WEBSHOT_USERNAME=myuser
 export WEBSHOT_PASSWORD=mypass
 npx @infodb/webshot capture https://secure.example.com --auth-type env
@@ -75,7 +85,7 @@ npx @infodb/webshot extract --input ./screenshots
 npx @infodb/webshot extract --input ./screenshots --output ./images
 
 # 単一ファイルから抽出
-npx @infodb/webshot extract --file ./screenshots/logs/12ab34cd_2024-01-01T12-00-00-000Z.json
+npx @infodb/webshot extract --file ./screenshots/12ab34cd_001.json
 ```
 
 ### インターラクティブモード
@@ -101,7 +111,7 @@ npx @infodb/webshot interactive https://example.com \
 - **`Ctrl+Q`**: インターラクティブモードを終了
 - **ブラウザウィンドウを閉じる**: インターラクティブモードを終了
 
-撮影されたスクリーンショットは通常の`capture`コマンドと同様に`logs/`と`evidence/`フォルダに保存され、差分検出も行われます。
+撮影されたスクリーンショットは通常の`capture`コマンドと同様に出力ディレクトリに保存され、差分検出も行われます。
 
 ### ログインフォーム解析と認証設定生成
 
@@ -127,7 +137,8 @@ npx @infodb/webshot analyze-auth https://example.com/login --headless
 ### `capture` コマンド
 
 - `<url>`: 撮影するWebページのURL（必須）
-- `-o, --output <dir>`: 出力ディレクトリ（デフォルト: `./screenshots`）
+- `-o, --output <dir>`: 出力ディレクトリ（デフォルト: `./screenshots`、環境変数: `WEBSHOT_OUTPUT_DIR`）
+- `-p, --prefix <prefix>`: カスタムプレフィックス（環境変数: `WEBSHOT_PREFIX`）
 - `-w, --width <number>`: ビューポート幅（デフォルト: `1280`）
 - `-h, --height <number>`: ビューポート高さ（デフォルト: `720`）
 - `--no-full-page`: フルページではなく表示領域のみ撮影
@@ -151,7 +162,8 @@ npx @infodb/webshot analyze-auth https://example.com/login --headless
 ### `interactive` コマンド
 
 - `<url>`: 表示するWebページのURL（必須）
-- `-o, --output <dir>`: 出力ディレクトリ（デフォルト: `./screenshots`）
+- `-o, --output <dir>`: 出力ディレクトリ（デフォルト: `./screenshots`、環境変数: `WEBSHOT_OUTPUT_DIR`）
+- `-p, --prefix <prefix>`: カスタムプレフィックス（環境変数: `WEBSHOT_PREFIX`）
 - `-w, --width <number>`: ビューポート幅（デフォルト: `1280`）
 - `-h, --height <number>`: ビューポート高さ（デフォルト: `720`）
 - `--auth-config <path>`: 認証設定ファイルのパス
@@ -171,29 +183,27 @@ npx @infodb/webshot analyze-auth https://example.com/login --headless
 
 ```
 screenshots/
-├── logs/
-│   ├── 12ab34cd_2024-01-01T12-00-00-000Z.json  # 全スクリーンショット（ログ用）
-│   ├── 12ab34cd_2024-01-01T12-05-00-000Z.json
-│   └── ef56gh78_2024-01-01T12-10-00-000Z.json  # 別URL
-├── evidence/
-│   ├── 12ab34cd_001.json                       # 差分のみ（エビデンス用）
-│   ├── 12ab34cd_002.json
-│   └── ef56gh78_001.json                       # 別URL
-└── extracted/                                  # 抽出されたPNG画像
-    ├── logs_12ab34cd_2024-01-01T12-00-00-000Z.png
-    └── evidence_12ab34cd_001.png
+├── 12ab34cd_001.json  # URLハッシュ + 連番
+├── 12ab34cd_002.json
+├── ef56gh78_001.json  # 別URL
+├── mysite_001.json    # カスタムプレフィックス使用
+├── mysite_002.json
+└── extracted/         # 抽出されたPNG画像
+    ├── 12ab34cd_001.png
+    ├── mysite_001.png
+    └── mysite_002.png
 ```
 
 ### ファイル命名規則
 
-- **ハッシュ**: URLのMD5ハッシュの最初の8文字
-- **Logsフォルダ**: `{hash}_{timestamp}.json` 形式（時系列順）
-- **Evidenceフォルダ**: `{hash}_{3桁連番}.json` 形式（差分検出時のみ保存）
-- **フォルダ分離**: `logs/`と`evidence/`でファイル種別を管理
+- **URLハッシュ使用時**: `{URLハッシュ}_{3桁連番}.json` （例: `12ab34cd_001.json`）
+- **プレフィックス使用時**: `{プレフィックス}_{3桁連番}.json` （例: `mysite_001.json`）
+- **識別子**: URLのMD5ハッシュの最初の8文字、またはカスタムプレフィックス
+- **連番**: 同一識別子で001から開始し、撮影毎に増加
 
 ## JSONファイル構造
 
-### Logsファイル例
+### スクリーンショットファイル例
 ```json
 {
   "metadata": {
@@ -201,7 +211,7 @@ screenshots/
     "timestamp": "2024-01-01T12:00:00.000Z",
     "sequence": 1,
     "hash": "12ab34cd",
-    "filename": "12ab34cd_2024-01-01T12-00-00-000Z.json",
+    "filename": "12ab34cd_001.json",
     "viewport": {
       "width": 1280,
       "height": 720
@@ -215,16 +225,15 @@ screenshots/
 }
 ```
 
-### Evidenceファイル例
+### カスタムプレフィックス使用時の例
 ```json
 {
   "metadata": {
     "url": "https://example.com",
     "timestamp": "2024-01-01T12:00:00.000Z",
     "sequence": 1,
-    "hash": "12ab34cd",
-    "filename": "12ab34cd_001.json",
-    "logsFilename": "12ab34cd_2024-01-01T12-00-00-000Z.json",
+    "hash": "mysite",
+    "filename": "mysite_001.json",
     "viewport": {
       "width": 1280,
       "height": 720
@@ -240,18 +249,28 @@ screenshots/
 
 ## 差分検出の仕組み
 
-1. **初回撮影**: 必ず`logs/`と`evidence/`両方のフォルダに保存
-2. **2回目以降**: 前回のlogsと比較して差分を検出
-   - 差分が閾値以上: `logs/`と`evidence/`両方に保存
-   - 差分が閾値未満: `logs/`のみに保存（`evidence/`には作成しない）
+1. **初回撮影**: 差分検出の基準がないため `hasDiff: true`、`diffPercentage: 100` で保存
+2. **2回目以降**: 前回のスクリーンショットと比較して差分を検出
+   - 差分がある場合: `hasDiff: true` と実際の差分パーセンテージを記録
+   - 差分がない場合: `hasDiff: false`、`diffPercentage: 0` を記録
 
-これにより、`evidence/`フォルダには**意味のある変更があった場合のみ**スクリーンショットが保存されます。
+### 識別子による管理
 
-### ファイル間の関連性
+- **同一識別子**: 同じURLまたは同じプレフィックスのスクリーンショットは同じ識別子でグループ化
+- **連番管理**: 識別子ごとに001から開始し、撮影の度に増加
+- **差分比較**: 同一識別子内で最新のスクリーンショットと比較
 
-- **Evidenceファイルのメタデータ**には、対応する`logsFilename`が記録される
-- 同一URLのファイルは同じハッシュプレフィックスで識別可能
-- `logs/`は時系列順、`evidence/`は差分検出順で管理される
+### 環境変数の活用
+
+```bash
+# 出力ディレクトリとプレフィックスの設定
+export WEBSHOT_OUTPUT_DIR=/path/to/screenshots
+export WEBSHOT_PREFIX=project_name
+
+# 認証情報の設定
+export WEBSHOT_USERNAME=your_username  
+export WEBSHOT_PASSWORD=your_password
+```
 
 ## 認証設定
 
@@ -322,10 +341,13 @@ webshot は複数の認証方式をサポートしています：
 セキュリティ向上のため、環境変数の使用を推奨します：
 
 ```bash
+# Basic認証用
 export WEBSHOT_USERNAME=your_username
 export WEBSHOT_PASSWORD=your_password
-export WEBSHOT_AUTH_HEADER=Authorization
-export WEBSHOT_AUTH_VALUE="Bearer your_token"
+
+# その他のツール設定
+export WEBSHOT_OUTPUT_DIR=/path/to/screenshots
+export WEBSHOT_PREFIX=project_name
 ```
 
 ## 開発・ビルド
